@@ -7,7 +7,6 @@
 	<meta name="apple-mobile-web-app-capable" content="yes">
 	<meta name="apple-mobile-web-app-status-bar-style" content="black">
 	
-	<script src="https://cdn.pubnub.com/pubnub.min.js"></script>
 	<script src="unistring.js"></script>
 	<script src="symbols.js"></script>
 	<title>Twitter Matrix</title>
@@ -33,7 +32,7 @@
 		onload = function() {
 			// based on
 			// https://codepen.io/P3R0/pen/MwgoKv
-			// https://www.pubnub.com/developers/realtime-data-streams/twitter-stream/
+			// Real-time data stream from https://github.com/quixio/real-time-data-sources
 
 			// visualization settings
 			var maxMessages = 10240;
@@ -47,7 +46,7 @@
 			
 			var maxStepsToResetColumn = 200;
 
-			var twitterMessages = []; // data stack (queue)
+			var chatMessages = []; // data stack (queue)
 			var messages = []; // current printed data
 			
 			var a = document.getElementById("a");
@@ -187,12 +186,12 @@
 					else
 					{
 						var startNewColumn = Math.random() > 0.95;
-						if (twitterMessages.length > 0 && startNewColumn)
+						if (chatMessages.length > 0 && startNewColumn)
 						{
-							var twitterMessage = twitterMessages.pop();
-							var symbols = getSymbols(twitterMessage.text);
-							
-							message.url = twitterMessage.url;
+							var chatMessage = chatMessages.pop();
+							var symbols = getSymbols(chatMessage.text);
+
+							message.url = chatMessage.url;
 							message.offset = 0;
 							message.symbols = symbols;
 						}
@@ -206,22 +205,22 @@
 				}
 				
 				// adjust speed
-				if (twitterMessages.length > (columns * 2))
+				if (chatMessages.length > (columns * 2))
 				{
 					if (currentSpeed > minSpeed)
 					{
 						currentSpeed -= speedStep; // speed up
-						
+
 						clearInterval(timerId);
 						timerId = setInterval(draw, currentSpeed);
 					}
 				}
-				else if (twitterMessages.length < (columns / 2))
+				else if (chatMessages.length < (columns / 2))
 				{
 					if (currentSpeed < maxSpeed)
 					{
 						currentSpeed += speedStep; // slow down
-						
+
 						clearInterval(timerId);
 						timerId = setInterval(draw, currentSpeed);
 					}
@@ -231,27 +230,56 @@
 			// Take language from url hash parameter
 			language = window.location.hash.substr(1).toLowerCase();
 
-			function addTwitterMessage(msg) {
-				var messageUrl = "https://twitter.com/" + msg.user.screen_name + "/status/" + msg.id_str;
-				twitterMessages.push({ text: msg.text, url: messageUrl });
+			function addChatMessage(text, conversationId) {
+				// Create a simple URL (no actual link available for chat messages)
+				var messageUrl = "#" + conversationId;
+				chatMessages.push({ text: text, url: messageUrl });
 			}
 
-			PUBNUB.init({
-				subscribe_key: 'sub-c-78806dd4-42a6-11e4-aed8-02ee2ddab7fe',
-				ssl: true
-			}).subscribe({
-				channel: 'pubnub-twitter',
-				message: function(msg) {
-					// skip if there are too many messages (events)
-					if (twitterMessages.length < maxMessages)
-					{
-						if (!language || msg.lang == language)
-						{
-							addTwitterMessage(msg);
+			// Connect to WebSocket stream for real-time chat data
+			var ws = new WebSocket('wss://ai-chat-wss-demo-realtimedatasources-prod.deployments.quix.io/timeseries');
+
+			ws.onopen = function() {
+				console.log('Connected to real-time data stream');
+			};
+
+			ws.onmessage = function(event) {
+				try {
+					var data = JSON.parse(event.data);
+
+					// Extract chat text from the WebSocket message
+					// The data format includes timestamps and parameters with chat text
+					if (data.timestamps && data.timestamps.length > 0) {
+						// Look for the 'chat' parameter in the data
+						if (data.stringValues && data.stringValues.chat) {
+							var conversationId = data.stringValues.conversation_id ? data.stringValues.conversation_id[0] : 'unknown';
+							for (var i = 0; i < data.stringValues.chat.length; i++) {
+								var text = data.stringValues.chat[i];
+								if (text && text.length > 0) {
+									// skip if there are too many messages (events)
+									if (chatMessages.length < maxMessages) {
+										addChatMessage(text, conversationId);
+									}
+								}
+							}
 						}
 					}
+				} catch (e) {
+					console.error('Error parsing message:', e);
 				}
-			});
+			};
+
+			ws.onerror = function(error) {
+				console.error('WebSocket error:', error);
+			};
+
+			ws.onclose = function() {
+				console.log('Disconnected from stream, attempting to reconnect...');
+				// Attempt to reconnect after 5 seconds
+				setTimeout(function() {
+					location.reload();
+				}, 5000);
+			};
 
 		}
 	</script>

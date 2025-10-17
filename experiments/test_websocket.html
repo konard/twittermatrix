@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>WebSocket Test</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #000; color: #0F0; }
+        #messages { white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+    <h1>WebSocket Test - Quixio AI Chat Stream</h1>
+    <div id="status">Connecting...</div>
+    <div id="messages"></div>
+
+    <script>
+        const statusEl = document.getElementById('status');
+        const messagesEl = document.getElementById('messages');
+
+        const ws = new WebSocket('wss://ai-chat-wss-demo-realtimedatasources-prod.deployments.quix.io/timeseries');
+
+        ws.onopen = function() {
+            statusEl.textContent = 'Connected!';
+            statusEl.style.color = '#0F0';
+        };
+
+        ws.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            messagesEl.textContent += JSON.stringify(data, null, 2) + '\n\n';
+            console.log('Received:', data);
+        };
+
+        ws.onerror = function(error) {
+            statusEl.textContent = 'Error: ' + error;
+            statusEl.style.color = '#F00';
+            console.error('WebSocket error:', error);
+        };
+
+        ws.onclose = function() {
+            statusEl.textContent = 'Disconnected';
+            statusEl.style.color = '#F80';
+        };
+    </script>
+</body>
+</html>
